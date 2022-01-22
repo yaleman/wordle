@@ -1,3 +1,7 @@
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
 [tool.poetry]
 name = "wordle"
 version = "0.1.0"
@@ -7,13 +11,11 @@ license = "MIT"
 
 [tool.poetry.dependencies]
 python = "^3.10"
-notebook = "^6.4.7"
 
 [tool.poetry.dev-dependencies]
 mypy = "^0.931"
 pylint = "^2.12.2"
 pytest = "^6.2.5"
 
-[build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+[tool.poetry.scripts]
+wordle = 'wordle.__main__:cli'

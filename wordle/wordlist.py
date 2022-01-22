@@ -1,5 +1,7 @@
 """ wordlists from wordle """
 
+# pylint: disable=too-many-lines
+
 wordle_list = [
     "cigar",
     "rebut",
