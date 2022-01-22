@@ -87,9 +87,10 @@ class WordleThing:
                 letterstodrop = ''.join(sorted(set(attempt_letter+notintheword)))
                 regex_result += r"[^"+letterstodrop+r"]{1}"
             if result_letter == "y":
+                letterstodrop = ''.join(sorted(set(attempt_letter+notintheword)))
                 if f"{i},{attempt_letter}" not in self.misplaced_letters:
                     self.misplaced_letters.append(f"{i},{attempt_letter}")
-                regex_result += r"[^"+attempt_letter+notintheword+r"]{1}"
+                regex_result += r"[^"+letterstodrop+r"]{1}"
         compiled_result = re.compile(regex_result)
         print(f"generated regex: {compiled_result}")
         return compiled_result
@@ -113,6 +114,10 @@ class WordleThing:
                 if result_letter == "y":
                     if f"{i},{attempt_letter}" not in self.misplaced_letters:
                         self.misplaced_letters.append(f"{i},{attempt_letter}")
+
+        for letter in self.banned_letters:
+            if letter in self.correct_letters.items():
+                self.banned_letters.remove(letter)
 
     def check_misplaced_letters(self, checkword: str) -> bool:
         """ ensures that misplaced letters are in the word, but also not in the place we know they're not """
