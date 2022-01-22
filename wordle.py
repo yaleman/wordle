@@ -2,12 +2,11 @@
 # import click
 
 from pathlib import Path
-# import re
+import re
 # import sys
 from typing import Dict, List, Optional, Tuple
 
-# import wordlist
-
+from wordlist import wordle_list, second_wordle_list
 
 WORDFILE = "/usr/share/dict/words"
 filepath = Path(WORDFILE)
@@ -29,6 +28,8 @@ class WordleThing:
     wordscores: Dict[str, int] = {}
 
     tries: List[Tuple[str, str]] = []
+
+    regexes: List[re.Pattern] = []
 
     def __init__(
         self,
@@ -60,12 +61,48 @@ class WordleThing:
                 wordscore += self.lettercounts[letter][i]
         return wordscore
 
+    def generate_regex(self, attempt, outcome):
+        """ generates a regex based on the attempt and result"""
+        self.regexes = []
+
+        notintheword = ""
+
+        # first, iterate over the word to find the "not in this word" letters
+        if "b" in outcome:
+            for index, letter in enumerate(attempt):
+                if outcome[index] == "b":
+                    print(f"adding {letter}")
+                    notintheword = f"{notintheword}{letter}"
+
+        regex_result = r""
+        for i in range(5):
+            attempt_letter = attempt[i].lower()
+            result_letter = outcome[i].lower()
+            if result_letter == "g":
+                self.correct_letters[i] = attempt_letter
+                regex_result += attempt_letter
+            if result_letter == "b":
+                # and attempt_letter not in self.banned_letters:
+                # self.banned_letters.append(attempt_letter)
+                letterstodrop = ''.join(sorted(set(attempt_letter+notintheword)))
+                regex_result += r"[^"+letterstodrop+r"]{1}"
+            if result_letter == "y":
+                if f"{i},{attempt_letter}" not in self.misplaced_letters:
+                    self.misplaced_letters.append(f"{i},{attempt_letter}")
+                regex_result += r"[^"+attempt_letter+notintheword+r"]{1}"
+        compiled_result = re.compile(regex_result)
+        print(f"generated regex: {compiled_result}")
+        return compiled_result
+
     def process_tries(
         self,
         # tries: List[Tuple[str, str]],
     ) -> None:
         """ processes the user input """
         for attempt, res in self.tries:
+            regex = self.generate_regex(attempt, res)
+            if regex not in self.regexes:
+                self.regexes.append(regex)
             for i in range(5):
                 attempt_letter = attempt[i].lower()
                 result_letter = res[i].lower()
@@ -73,24 +110,46 @@ class WordleThing:
                     self.correct_letters[i] = attempt_letter
                 if result_letter == "b" and attempt_letter not in self.banned_letters:
                     self.banned_letters.append(attempt_letter)
-                if result_letter == "y" and f"{i},{attempt_letter}" not in self.misplaced_letters:
-                    self.misplaced_letters.append(f"{i},{attempt_letter}")
+                if result_letter == "y":
+                    if f"{i},{attempt_letter}" not in self.misplaced_letters:
+                        self.misplaced_letters.append(f"{i},{attempt_letter}")
+
+    def check_misplaced_letters(self, checkword: str) -> bool:
+        """ ensures that misplaced letters are in the word, but also not in the place we know they're not """
+        for mpl in self.misplaced_letters:
+            ind, misplaced = mpl.split(",")
+            if misplaced not in checkword or checkword[int(ind)] == mpl:
+                return False
+        return True
 
     def test_word(
         self,
         checkword: str,
     ) -> bool:
         """ tests if a given word is OK, returns a bool """
+
+        for regex in self.regexes:
+            if not regex.match(checkword):
+                return False
         for element in self.correct_letters: #pylint: disable=consider-using-dict-items
             if checkword[element] != self.correct_letters[element]:
                 return False
         for banned_letter in self.banned_letters:
             if banned_letter in checkword:
+                # TODO: check that the letter's not already identified as good
+                # figure out how many instances of the bad letter there are
+                foundbad = re.finditer(banned_letter, checkword)
+                for searchresult in foundbad:
+                    # print(f"found bad in {checkword}: {searchresult}")
+                    resultindex=searchresult.span()[0]
+                    if resultindex in self.correct_letters and self.correct_letters[resultindex] != banned_letter:
+                        print(f"Dropping {checkword}")
+                        return False
+                # sys.exit(1)
+                # for letter_index in self.correct_letters:
                 return False
-        for mpl in self.misplaced_letters:
-            ind, misplaced = mpl.split(",")
-            if misplaced not in checkword and checkword[int(ind)] == mpl:
-                return False
+        if not self.check_misplaced_letters(checkword):
+            return False
         return True
 
     def check_words(self):
@@ -174,18 +233,25 @@ class WordleThing:
                 print(f"{score} - {word}")
         return False
 
-wordle = WordleThing(wordfile=WORDFILE)
+
+if __name__ == "__main__":
+    wordle = WordleThing(wordlist=wordle_list+second_wordle_list)
 
 
-# while True:
-#     attempt_word = input("Word you tried: ").strip()
-#     result = input("Result (list of gbyy): ").strip()
-#     try:
-#         wordle.add_try(attempt_word, result)
-#     except ValueError as input_error:
-#         print(f"Input validation error: {input_error}")
-#     wordle.process_tries()
-#     wordle.check_words()
-#     wordle.generate_wordscores()
-#     wordle.print_results()
+    while True:
 
+        wordle.process_tries()
+        wordle.check_words()
+        wordle.generate_wordscores()
+        wordle.print_results()
+
+        attempt_word = input("Word you tried: ").strip()
+        result = input("Result (list of gbyy): ").strip()
+        try:
+            wordle.add_try(attempt_word, result)
+        except ValueError as input_error:
+            print(f"Input validation error: {input_error}")
+        wordle.process_tries()
+        wordle.check_words()
+        wordle.generate_wordscores()
+        wordle.print_results()
