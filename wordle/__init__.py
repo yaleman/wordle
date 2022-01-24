@@ -1,6 +1,8 @@
 """ wordle handler """
 # import click
 
+import logging
+
 from pathlib import Path
 import re
 import sys
@@ -27,13 +29,23 @@ class WordleThing:
     def __init__(
         self,
         wordlist: Optional[List[str]] = None,
-        wordfile: Optional[str] = None
+        wordfile: Optional[str] = None,
+        debug: bool=False,
+        show_words: int=10,
     ):
         """ startup """
         if wordlist:
             self.wordlist = wordlist
         if wordfile:
             self.load_wordlist(wordfile)
+        self.show_words = show_words
+
+        loglevel = logging.DEBUG if debug else logging.INFO
+        self.logger = logging.getLogger("wordle")
+        logging.basicConfig(
+            level=loglevel,
+            format='%(message)s')
+
 
     def load_wordlist(self, filename: str):
         """ loads a list of words from a file """
@@ -64,15 +76,15 @@ class WordleThing:
         if "b" in outcome:
             for index, letter in enumerate(attempt):
                 if outcome[index] == "b":
-                    print(f"adding {letter}")
+                    self.logger.debug("adding %s", letter)
                     notintheword = ''.join(sorted(set(f"{notintheword}{letter}")))
         if "y" in outcome:
             for index, letter in enumerate(attempt):
                 if outcome[index] == "y":
-                    print(f"adding {letter}")
+                    self.logger.debug("adding %s", letter)
                     required_letters = ''.join(sorted(set(f"{required_letters}{letter}")))
-        print(f"Required letters: {required_letters}")
-        print(f"Banned letters: {notintheword}")
+        self.logger.debug("Required letters: '%s'", required_letters)
+        self.logger.debug("Banned letters: '%s'", notintheword)
 
         # add the things
         regex_result = r"^"
@@ -82,19 +94,19 @@ class WordleThing:
             if result_letter == "g":
                 self.correct_letters[i] = attempt_letter
                 regex_result = regex_result + attempt_letter# + r"{1}"
-                print(f"g - {regex_result}")
+                self.logger.debug("g - %s", regex_result)
             if result_letter == "b":
                 letterstodrop = ''.join(sorted(set(attempt_letter+notintheword)))
                 regex_result += r"[^"+letterstodrop+r"]{1}"
-                print(f"b - {regex_result}")
+                self.logger.debug("b - %s", regex_result)
             if result_letter == "y":
                 letterstodrop = ''.join(sorted(set(attempt_letter+notintheword)))
                 if f"{i},{attempt_letter}" not in self.misplaced_letters:
                     self.misplaced_letters.append(f"{i},{attempt_letter}")
                 regex_result += r"[^"+letterstodrop+r"]{1}"
-                print(f"y - {regex_result}")
+                self.logger.debug("y - %s",  regex_result)
         compiled_result = re.compile(regex_result)
-        print(f"generated regex: {compiled_result}")
+        self.logger.debug("generated regex: %s", compiled_result)
         return (required_letters, compiled_result)
 
     def process_tries(
@@ -104,7 +116,7 @@ class WordleThing:
         for attempt, res in self.tries:
             trytuple = self.generate_regex(attempt, res)
             if trytuple not in self.regexes:
-                print(f"Adding trytuple: {trytuple}")
+                self.logger.debug("Adding trytuple: %s", trytuple)
                 self.regexes.append(trytuple)
 
     def test_word(
@@ -175,23 +187,24 @@ class WordleThing:
     def list_tries(self):
         """ lists the attempts """
         for attempt, attempt_result in self.tries:
-            print(f"{attempt}\t{attempt_result}")
+            self.logger.info("%s\t%s", attempt, attempt_result)
 
     def print_results(self) -> bool:
         """ display the things """
 
-        print("Regexes:")
+        self.logger.info("Regexes:")
         for regex in self.regexes:
-            print(regex)
+            self.logger.info(regex)
         if len(self.allowed_words) == 0:
-            print("No possible words remain, bailing.")
+            self.logger.error("No possible words remain, bailing.")
             sys.exit(1)
+
         elif len(self.allowed_words) == 1:
             firstword = self.allowed_words[-1]
-            print(f"Found word: {firstword}")
+            self.logger.info("You found the word! %s", firstword)
             return True
-        print("Dumping wordlist")
+        self.logger.info("Here's the word list:")
         scoredlist = sorted((value, key) for (key, value) in self.wordscores.items())
-        for score, word in reversed(scoredlist[-5:]):
-            print(f"{score} - {word}")
+        for score, word in reversed(scoredlist[-self.show_words:]):
+            self.logger.info("%s - %s", score, word)
         return False
